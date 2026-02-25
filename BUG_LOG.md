@@ -265,10 +265,37 @@ These were not crash bugs, but produced garbage/hallucinated output.
 
 ---
 
-## 📊 Bug Summary
+## 🔵 Part 3: Bonus Improvements (Architectural)
+
+These improvements were made beyond the original bug fixes to optimize the system for reliability and scale.
+
+---
+
+### Bonus #1 — Queue Worker Model (Async Processing)
+
+**File:** `main.py`  
+**Improvement:** Switched from a blocking synchronous model to an asynchronous background worker model.
+
+- **Issue:** Previously, the API would wait for the entire AI Crew to finish (30-60s) before responding. If the browser timeout or connection dropped, the result was lost.
+- **Fix:** Used FastAPI `BackgroundTasks`. The API now saves the file and returns a `task_id` immediately. The AI runs in the background.
+
+---
+
+### Bonus #2 — Database Integration (SQLite)
+
+**Files:** `database.py`, `main.py`  
+**Improvement:** Added local persistence using SQLAlchemy.
+
+- **Issue:** Results were only saved as raw JSON files. There was no way to query task status or programmatically retrieve past results.
+- **Fix:** Added an SQLite database to track every analysis. Users can now poll `/status/{task_id}` to retrieve their results even hours later.
+
+---
+
+## 📊 Final Bug/Improvement Summary
 
 | Category | Count |
 |----------|-------|
 | Deterministic (crash-causing) bugs | 9 |
 | Inefficient prompt bugs | 6 |
-| **Total bugs fixed** | **15** |
+| Architectural Bonus Improvements | 2 |
+| **Total Enhancements** | **17** |

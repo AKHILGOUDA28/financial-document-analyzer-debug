@@ -1,176 +1,92 @@
-# Financial Document Analyzer — Debugged & Refactored Version
+# Financial Document Analyzer — *Refactored & Future-Proofed* 🚀
 
-This repository contains my revised version of the Financial Document Analyzer built using CrewAI and FastAPI.
+This repository contains my revised version of the Financial Document Analyzer built using **CrewAI** and **FastAPI**. I have transformed a broken, synchronous codebase into a stable, asynchronous system with database persistence.
 
-The original codebase contained multiple deterministic bugs that prevented execution, along with loosely designed prompts that resulted in unreliable financial analysis.
-
-In this submission, I have:
-
-- Resolved all runtime errors
-- Corrected misconfigured CrewAI components
-- Refactored agent and task definitions
-- Redesigned prompts for structured, professional financial reasoning
-- Enforced deterministic JSON outputs
-- Implemented output persistence
-
-The system now executes reliably and produces consistent, structured analysis results.
+### ✅ Bonus Points Implemented
+1.  **Queue Worker Model:** Integrated FastAPI `BackgroundTasks` to handle concurrent requests without blocking. The API now returns a `task_id` immediately.
+2.  **Database Integration:** Added an **SQLite** database using **SQLAlchemy** to store persistent records of every analysis, task status, and result.
 
 ---
 
-## Project Overview
+## 🏗️ Re-Engineered System Flow
 
-The application analyzes financial PDF documents using a multi-agent CrewAI workflow.
-
-Each agent performs a specific responsibility within the analysis pipeline:
-
-- Financial Analyst — extracts financial metrics and summarizes performance
-- Compliance Reviewer — validates document credibility and reporting standards
-- Investment Advisor — provides evidence-based investment stance
-- Risk Specialist — categorizes and evaluates financial risk exposure
-
-The FastAPI backend accepts a PDF upload, processes it through the CrewAI system, returns structured JSON, and saves the result locally.
+1.  **Client** uploads a PDF via `POST /analyze`.
+2.  **API** saves the file, creates a `pending` record in **SQLite**, and returns a `task_id`.
+3.  **Background Worker** takes the task, runs the **CrewAI** workflow (4 specialist agents).
+4.  **Database** is updated from `pending` to `completed` (or `failed`) with the final AI response.
+5.  **Client** polls `GET /status/{task_id}` to retrieve results.
 
 ---
 
-## Deterministic Bugs Identified & Fixed
+## 🛑 Critical Bug Fixes (The "Crash" Bugs)
 
-Below is a summary of the critical issues that were preventing stable execution.
-
-| # | Issue | Root Cause | Resolution |
-|---|-------|------------|------------|
-| 1 | LLM Initialization Failure | `llm` referenced before assignment | Properly initialized ChatOpenAI instance |
-| 2 | Incorrect Tool Parameter | Used `tool=` instead of `tools=` | Corrected to `tools=[...]` |
-| 3 | Agent Execution Limits | `max_iter=1`, `max_rpm=1` | Adjusted for realistic reasoning flow |
-| 4 | Broken Import | Invalid CrewAI tools import | Corrected module import |
-| 5 | Undefined PDF Class | Used non-existent `Pdf` class | Replaced with PyPDFLoader |
-| 6 | Async Tool Misconfiguration | Tool defined as async without decorator | Converted to sync and registered with @tool |
-| 7 | Namespace Collision | API route name matched Task name | Renamed route handler |
-| 8 | Static File Usage | Uploaded file path ignored | Passed dynamic input into Crew kickoff |
-| 9 | Missing Output Persistence | Results not saved | Implemented timestamped JSON storage |
-
-All runtime-breaking issues have been resolved. The application now runs without crashes.
+| # | Bug | Root Cause | Resolution |
+|---|---|---|---|
+| **1** | **LLM Crash** | `llm = llm` caused `NameError` | Initialized `ChatOpenAI(model="gpt-4o-mini")` |
+| **2** | **Tool Scope** | Agent used `tool=` (singular) | Corrected to `tools=` (plural) for tool recognition |
+| **3** | **Execution Limits**| `max_iter=1`, `max_rpm=1` | Bumped to `max_iter=5`, `max_rpm=10` for deep analysis |
+| **4** | **Import Error** | `from crewai_tools import tools` | Fixed to `from crewai.tools import tool` |
+| **5** | **Ghost `Pdf` Class**| Referenced `Pdf` which was never imported | Replaced with `PyPDFLoader` |
+| **6** | **Async Conflict** | Tool was `async def` (unsupported) | Converted to sync + added `@tool` decorator |
+| **7** | **Naming Collision**| API route was named same as Task object | Renamed route to `analyze_document` |
+| **8** | **Static Loading** | `file_path` ignored in `kickoff` | Correctly passed dynamic path to the AI agents |
 
 ---
 
-## Prompt Refactoring & Agent Improvements
+## 🧠 Brain Overhaul (Prompt Engineering)
 
-The original prompts were vague and allowed unreliable reasoning.
-Each agent was redesigned to reflect realistic financial roles and enforce structured decision-making.
+The original agents were programmed to "make up facts" and "YOLO." I rewrote all 4 specialist identities:
+- **Financial Analyst:** Extracts 100% factual GAAP metrics (Revenue, EPS, Ratios).
+- **Compliance Officer:** Validates document structure and reporting ethics.
+- **Investment Advisor:** Provides evidence-based stances (Buy/Hold/Sell).
+- **Risk Specialist:** Assesses Market/Credit/Liquidity risk via VaR benchmarks.
 
-Improvements introduced:
-
-- Clearly defined professional identities
-- Domain-aligned reasoning expectations
-- Explicit output schemas
-- Reduced ambiguity and hallucination risk
-- Controlled temperature for consistent outputs
+Every task now enforces a **Strict JSON Output** to ensure machine-readable, reliable results.
 
 ---
 
-## Structured JSON Output
+## 🚀 Setup Instructions
 
-All analysis tasks enforce deterministic JSON responses.
+1.  **Environment**
+    ```bash
+    python -m venv venv
+    venv\Scripts\activate       # Windows
+    source venv/bin/activate    # Mac/Linux
+    pip install -r requirements.txt
+    ```
 
-Example response structure:
+2.  **API Keys**
+    Create a `.env` file:
+    ```env
+    OPENAI_API_KEY=your_key_here
+    ```
 
-{
-  "financial_summary": "...",
-  "key_metrics": {
-    "revenue": "...",
-    "net_income": "...",
-    "eps": "..."
-  },
-  "investment_stance": "Bullish | Neutral | Bearish",
-  "risk_assessment": {
-    "market_risk": "...",
-    "credit_risk": "...",
-    "liquidity_risk": "..."
-  }
-}
-
-This ensures:
-
-- Machine-readable responses
-- API reliability
-- Easier downstream integration
-- Reduced formatting inconsistencies
+3.  **Run Server**
+    ```bash
+    uvicorn main:app --reload
+    ```
 
 ---
 
-## System Flow
+## 🔌 API Documentation
 
-Client
-→ FastAPI Endpoint (POST /analyze)
-→ CrewAI (Agents + Tasks)
-→ PDF Loader (PyPDFLoader)
-→ Structured JSON Response
-→ Saved to outputs/analysis_{timestamp}.json
+### 1. `POST /analyze`
+Upload a PDF for analysis.
+- **Payload:** `file` (multipart/pdf)
+- **Returns:** `task_id` (used to track analysis)
 
----
+### 2. `GET /status/{task_id}`
+Checks if the AI has finished.
+- **Status Types:** `pending`, `completed`, `failed`.
+- **Returns:** The full JSON analysis result once completed.
 
-## Setup Instructions
-
-1. Create Virtual Environment
-
-python -m venv venv
-
-Activate:
-
-Windows:
-venv\Scripts\activate
-
-Mac/Linux:
-source venv/bin/activate
-
-2. Install Dependencies
-
-pip install -r requirements.txt
-
-3. Configure Environment Variables
-
-Create a .env file:
-
-OPENAI_API_KEY=your_api_key_here
-
-4. Run the Application
-
-uvicorn main:app --reload
+### 3. `GET /`
+Standard health check.
 
 ---
 
-## API Specification
-
-Endpoint:
-POST /analyze
-
-Request:
-- Content-Type: multipart/form-data
-- Field: file (PDF document)
-
-Response:
-- Structured JSON analysis
-- Automatically persisted to the outputs/ directory
-
----
-
-## Key Improvements Beyond Bug Fixes
-
-- Stable LLM initialization
-- Proper tool registration
-- Dynamic file handling
-- Controlled agent iteration limits
-- Deterministic structured outputs
-- Output persistence for auditability
-- Cleaner separation of responsibilities
-
----
-
-## Final Status
-
-- All deterministic runtime errors resolved
-- Agent prompts refactored for structured financial reasoning
-- Stable CrewAI workflow
-- Deterministic JSON API responses
-- Persistent output storage implemented
-
-The system is now reliable, structured, and ready for further extension.
+## 📊 Summary of Improvements
+- ✅ **Fixed:** All 9 runtime/crash bugs.
+- ✅ **Improved:** Agent reasoning and prompt factual grounding.
+- ✅ **Optimized:** Switched to an async background worker model.
+- ✅ **Stored:** Integrated SQLite for persistent record keeping.
