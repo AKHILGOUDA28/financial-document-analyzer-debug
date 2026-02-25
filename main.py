@@ -2,6 +2,8 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 import os
 import uuid
 import asyncio
+import json
+from datetime import datetime
 
 from crewai import Crew, Process
 from agents import financial_analyst
@@ -17,7 +19,12 @@ def run_crew(query: str, file_path: str="data/sample.pdf"):
         process=Process.sequential,
     )
     
-    result = financial_crew.kickoff({'query': query})
+    # FIX (Bug #8): `file_path` was accepted but never passed into kickoff().
+    # The crew always read the default sample.pdf, ignoring every uploaded file.
+    result = financial_crew.kickoff({
+        'query': query,
+        'file_path': file_path  # now the uploaded file path properly reaches the agents
+    })
     return result
 
 @app.get("/")
@@ -26,7 +33,7 @@ async def root():
     return {"message": "Financial Document Analyzer API is running"}
 
 @app.post("/analyze")
-async def analyze_financial_document(
+async def analyze_document(  # FIX (Bug #7): Renamed from `analyze_financial_document` to avoid collision with the imported Task of the same name. The function definition was silently overwriting the import.
     file: UploadFile = File(...),
     query: str = Form(default="Analyze this financial document for investment insights")
 ):
@@ -51,11 +58,27 @@ async def analyze_financial_document(
         # Process the financial document with all analysts
         response = run_crew(query=query.strip(), file_path=file_path)
         
+        # FIX (Bug #9): Results were never saved to disk — outputs/ folder was always empty.
+        # Now saving each analysis as a timestamped JSON file.
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"outputs/analysis_{timestamp}.json"
+        os.makedirs("outputs", exist_ok=True)
+
+        output_data = {
+            "timestamp": timestamp,
+            "query": query,
+            "file_processed": file.filename,
+            "analysis": str(response)
+        }
+        with open(output_path, "w") as out_f:
+            json.dump(output_data, out_f, indent=2)
+
         return {
             "status": "success",
             "query": query,
             "analysis": str(response),
-            "file_processed": file.filename
+            "file_processed": file.filename,
+            "output_saved_to": output_path
         }
         
     except Exception as e:

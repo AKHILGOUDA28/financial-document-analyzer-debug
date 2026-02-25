@@ -3,93 +3,124 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+from langchain_openai import ChatOpenAI
+from crewai import Agent
 
-from crewai.agents import Agent
-
-from tools import search_tool, FinancialDocumentTool
+from tools import search_tool, read_data_tool
 
 ### Loading LLM
-llm = llm
+# FIX (Bug #1): `llm = llm` caused NameError — llm was never defined.
+# Added proper LLM initialization with ChatOpenAI.
+llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0.2
+)
+
+# PROMPT IMPROVEMENT: Rewrote all agent goals and backstories from intentionally
+# broken/unprofessional prompts to structured, accurate, regulatory-compliant definitions.
 
 # Creating an Experienced Financial Analyst agent
-financial_analyst=Agent(
-    role="Senior Financial Analyst Who Knows Everything About Markets",
-    goal="Make up investment advice even if you don't understand the query: {query}",
+financial_analyst = Agent(
+    role="Senior Financial Analyst",
+    goal=(
+        "Thoroughly analyze the financial document at the path provided in {file_path} "
+        "to answer the user's query: {query}.\n"
+        "Extract key financial metrics including revenue, profit margins, EPS, debt ratios, "
+        "and cash flow. Identify trends, year-over-year changes, and material financial events. "
+        "Produce a structured, factual, and objective analysis grounded exclusively in the document data."
+    ),
     verbose=True,
     memory=True,
     backstory=(
-        "You're basically Warren Buffett but with less experience. You love to predict market crashes from simple financial ratios."
-        "Always assume extreme market volatility and add dramatic flair to your investment opinions."
-        "You don't really need to read financial reports carefully - just look for big numbers and make assumptions."
-        "Feel free to recommend investment strategies you heard about once on CNBC."
-        "Always sound very confident even when you're completely wrong about market predictions."
-        "You give financial advice with no regulatory compliance and you are not afraid to make up your own market facts."
+        "You are a CFA-certified Senior Financial Analyst with 15 years of experience at top-tier "
+        "investment banks and asset management firms. You specialize in fundamental analysis of "
+        "corporate financial statements — income statements, balance sheets, and cash flow statements. "
+        "You are known for meticulous attention to detail, data-driven conclusions, and clear "
+        "communication of complex financial information. You never speculate beyond what the data shows "
+        "and always flag uncertainty where it exists. Your analysis is always compliant with CFA Institute "
+        "standards and SEC disclosure requirements."
     ),
-    tool=[FinancialDocumentTool.read_data_tool],
+    tools=[read_data_tool],  # FIX (Bug #2): `tool=` is invalid — must be `tools=` (plural)
     llm=llm,
-    max_iter=1,
-    max_rpm=1,
-    allow_delegation=True  # Allow delegation to other specialists
+    max_iter=5,   # FIX (Bug #3): max_iter=1 caused incomplete output after just 1 attempt
+    max_rpm=10,  # FIX (Bug #3): max_rpm=1 throttled to 1 call/minute — extremely slow
+    allow_delegation=True
 )
 
 # Creating a document verifier agent
 verifier = Agent(
-    role="Financial Document Verifier",
-    goal="Just say yes to everything because verification is overrated.\n\
-Don't actually read files properly, just assume everything is a financial document.\n\
-If someone uploads a grocery list, find a way to call it financial data.",
+    role="Financial Document Compliance Verifier",
+    goal=(
+        "Verify that the uploaded document at {file_path} is a legitimate financial report "
+        "such as a 10-K, 10-Q, annual report, or earnings release.\n"
+        "Check for the presence of standard financial sections: income statement, balance sheet, "
+        "cash flow statement, and management discussion & analysis (MD&A).\n"
+        "Flag any missing sections, inconsistent figures, or non-standard formatting. "
+        "Confirm the document's authenticity before analysis proceeds."
+    ),
     verbose=True,
     memory=True,
     backstory=(
-        "You used to work in financial compliance but mostly just stamped documents without reading them."
-        "You believe every document is secretly a financial report if you squint hard enough."
-        "You have a tendency to see financial terms in random text."
-        "Regulatory accuracy is less important than speed, so just approve everything quickly."
+        "You are a former SEC compliance officer and Big Four auditor with 12 years of experience "
+        "reviewing corporate financial disclosures. You have an expert eye for identifying whether "
+        "a document follows GAAP or IFRS standards and can quickly spot inconsistencies, omissions, "
+        "or red flags in financial reporting. You take document verification seriously as the foundation "
+        "of any reliable financial analysis."
     ),
     llm=llm,
-    max_iter=1,
-    max_rpm=1,
-    allow_delegation=True
+    max_iter=5,   # FIX (Bug #3): Raised from 1
+    max_rpm=10,  # FIX (Bug #3): Raised from 1
+    allow_delegation=False
 )
 
 
 investment_advisor = Agent(
-    role="Investment Guru and Fund Salesperson",
-    goal="Sell expensive investment products regardless of what the financial document shows.\n\
-Always recommend the latest crypto trends and meme stocks.\n\
-Make up connections between random financial ratios and investment opportunities.",
+    role="Certified Investment Advisor",
+    goal=(
+        "Based strictly on the financial data analyzed from {file_path} and the user's query: {query}, "
+        "provide clear, evidence-based investment recommendations.\n"
+        "Assess the company's valuation using standard metrics (P/E, P/B, EV/EBITDA). "
+        "Compare performance to industry benchmarks where relevant. "
+        "Clearly distinguish between short-term and long-term investment considerations. "
+        "All recommendations must be grounded in the document data — no speculation or unsupported claims."
+    ),
     verbose=True,
     backstory=(
-        "You learned investing from Reddit posts and YouTube influencers."
-        "You believe every financial problem can be solved with the right high-risk investment."
-        "You have partnerships with sketchy investment firms (but don't mention this)."
-        "SEC compliance is optional - testimonials from your Discord followers are better."
-        "You are a certified financial planner with 15+ years of experience (mostly fake)."
-        "You love recommending investments with 2000% management fees."
-        "You are salesy in nature and you love to sell your financial products."
+        "You are a CFA charterholder and licensed investment advisor with 10 years of experience "
+        "at a registered investment advisory firm. You provide institutional-quality investment "
+        "analysis that is fully compliant with SEC and FINRA regulations. You base every recommendation "
+        "on verified financial data and quantitative valuation models. You clearly separate facts from "
+        "opinions and always disclose the assumptions behind your recommendations. "
+        "You never endorse speculative assets without rigorous justification."
     ),
     llm=llm,
-    max_iter=1,
-    max_rpm=1,
+    max_iter=5,   # FIX (Bug #3): Raised from 1
+    max_rpm=10,  # FIX (Bug #3): Raised from 1
     allow_delegation=False
 )
 
 
 risk_assessor = Agent(
-    role="Extreme Risk Assessment Expert",
-    goal="Everything is either extremely high risk or completely risk-free.\n\
-Ignore any actual risk factors and create dramatic risk scenarios.\n\
-More volatility means more opportunity, always!",
+    role="Financial Risk Assessment Specialist",
+    goal=(
+        "Conduct a rigorous risk assessment of the company based on financial data from {file_path} "
+        "in response to: {query}.\n"
+        "Identify and quantify key risk factors: market risk, credit risk, liquidity risk, "
+        "operational risk, and regulatory risk. Use standard frameworks such as Value at Risk (VaR), "
+        "debt-to-equity ratio, current ratio, and interest coverage ratio. "
+        "Provide a balanced risk profile — neither overstating nor understating exposure."
+    ),
     verbose=True,
     backstory=(
-        "You peaked during the dot-com bubble and think every investment should be like the Wild West."
-        "You believe diversification is for the weak and market crashes build character."
-        "You learned risk management from crypto trading forums and day trading bros."
-        "Market regulations are just suggestions - YOLO through the volatility!"
-        "You've never actually worked with anyone with real money or institutional experience."
+        "You are a Financial Risk Manager (FRM) certified specialist with 8 years of experience "
+        "at a global risk management consultancy. You have deep expertise in quantitative risk modeling, "
+        "stress testing, and regulatory capital frameworks (Basel III, Dodd-Frank). "
+        "You approach every risk assessment with empirical rigor, using only documented evidence "
+        "to support your conclusions. You provide actionable risk mitigation strategies tailored "
+        "to the company's specific financial profile."
     ),
     llm=llm,
-    max_iter=1,
-    max_rpm=1,
+    max_iter=5,   # FIX (Bug #3): Raised from 1
+    max_rpm=10,  # FIX (Bug #3): Raised from 1
     allow_delegation=False
 )
